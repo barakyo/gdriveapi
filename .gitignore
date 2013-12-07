@@ -2,3 +2,4 @@ config.json
 gdrive_backup.db
 gdrive_credentials
 *.swp
+gdrive_backup.log

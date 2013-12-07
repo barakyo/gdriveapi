@@ -1,12 +1,15 @@
 import httplib2
 import json
 import dataset
+import logging
 
 from apiclient.discovery import build
 from apiclient.http import MediaFileUpload
 from oauth2client.client import OAuth2WebServerFlow
 from oauth2client.file import Storage
 from apiclient import errors
+
+logging.basicConfig(filename='gdrive_backup.log', level=logging.DEBUG)
 
 class GDriveBackup:
     
@@ -16,12 +19,13 @@ class GDriveBackup:
         self.credentials = self.credentials_file.get()
         # Init connection to SQLite database
         self.db = dataset.connect('sqlite:///gdrive_backup.db')
+        # Assume the config path is in the current dir
+        self.config_path = config_path
+        # Parse the config file for client secret and id
+        self.parse_config()
         if not self.credentials:
-            # No credentials exist, so parse config and get credentials
-            # Assume the config path is in the current dir
-            self.config_path = config_path
-            # Parse the config file for client secret and id
-            self.parse_config()
+            logging.debug("Parsing config and authenticating..")
+            # No credentials exist, user must authenticate and get creds 
             # Instantiate the scopes to be used
             self.SCOPES = [
                     "https://www.googleapis.com/auth/drive.file",
@@ -48,7 +52,12 @@ class GDriveBackup:
             for path in self.paths:
                 # Add paths to path_table
                 path_table = self.db['path_table']
-                path_table.insert(path)
+                # Determine if this path has already been inserted
+                existing_path = path_table.find_one(
+                        gdrive_path=path['gdrive_path'])
+                # If the path doesn't exist insert it into the db
+                if not existing_path:
+                    path_table.insert(path)
              
     def authenticate(self):
         flow = OAuth2WebServerFlow(self.CLIENT_ID,self.CLIENT_SECRET,self.SCOPES,self.REDIRECT_URL)
@@ -56,7 +65,7 @@ class GDriveBackup:
             # Follow the steps for authentication
             authorize_url = flow.step1_get_authorize_url()
             print("Please goto the following link in your browser: " + authorize_url)
-            auth_code = raw_input("Enter verification code")
+            auth_code = raw_input("Enter verification code: ")
             self.credentials = flow.step2_exchange(auth_code)
             # Store the credentials in Storage file
             self.credentials_file.put(self.credentials)
@@ -70,13 +79,16 @@ class GDriveBackup:
             # make a request for this folder
             try:
                 gdrive_folder = self.drive_service.files().list(**query_dict).execute()
+                logging.debug(gdrive_folder)
             except errors.HttpError, error:
                 print "An error occured: %s" % error
+                pass
 
     def construct_query_dict(self, folder):
-        q_string = "title contains '" + folder['gdrive_path'] 
-        + " and mimeType = 'application/vnd.google-apps.folder'" 
-
+        logging.debug("Creaing query string for: " + folder['gdrive_path'])
+        q_string = "title '" + folder['gdrive_path'] + "' and " \
+        + " mimeType = 'application/vnd.google-apps.folder'"
+        logging.debug("Query string: " + q_string) 
         return {
                 "q": q_string 
         }
