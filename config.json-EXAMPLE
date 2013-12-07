@@ -1,0 +1,11 @@
+{
+    "client_id": "YOUR CLIENT ID",
+    "client_secret": "YOUR CLIENT SECRET",
+    "paths": [
+        {
+            "gdrive_path": "path/to/folder/on/gdrive",
+            "filesystem_path": "/home/user/folder/"
+        }
+    ]
+}
+
