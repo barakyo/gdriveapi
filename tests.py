@@ -1,5 +1,6 @@
 import unittest
 from gdriveapi import GDriveAPI
+from gdriveapi import GDriveAPIParser
 
 class GDriveAPITests(unittest.TestCase):
     """ Tests GDriveAPI  for several cases including:
@@ -27,6 +28,20 @@ class GDriveAPITests(unittest.TestCase):
 
     def test_get_folder(self):
         pass
+
+    def test_title_contains(self):
+        parser = GDriveAPIParser()
+        token_list = ['title', '_', 'contains', '=', 'blue']
+        tokens = parser.parse(title_contains="blue")
+        for expected, result in zip(token_list, tokens[0]):
+            self.assertEqual(expected, result, expected + "!=" + result)
+
+    def test_fulltext_equals(self):
+        """ This test should fail since fullText cannot use the = operator """
+        parser = GDriveAPIParser()
+        with self.assertRaises(ValueError):
+            tokens = parser.parse(fullText="blue")
+
 
 if __name__ == '__main__':
     unittest.main()     

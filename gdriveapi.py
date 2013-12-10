@@ -2,7 +2,7 @@ import httplib2
 import json
 import dataset
 import logging
-import pyparsing
+from pyparsing import Word, alphas, ParseException
 
 from apiclient.discovery import build
 from apiclient.http import MediaFileUpload
@@ -10,7 +10,7 @@ from oauth2client.client import OAuth2WebServerFlow
 from oauth2client.file import Storage
 from apiclient import errors
 
-class GDriveAPI:
+class GDriveAPI(object):
 
     def __init__(self, credentials_file=None, **config_kwargs):
         """ Instantiates a GDriveAPI class. Will use the provided 
@@ -77,15 +77,15 @@ class GDriveAPI:
             self.credentials_file.put(self.credentials)
 
 
-class GDriveAPIParser:
+class GDriveAPIParser(object):
 
     def __init__(self):
         self.fields_ops = {
             'title': ['contains', '='],
             'fullText': ['contains'],
             'mimeType': ['='],
-            'modifiedDate': ['<=', '<', '=', '>', '>='],
-            'lastViewedByMeDate': ['<=', '<', '=', '>', '>='],
+            'modifiedDate': ['lte', 'lt', '=', 'gt', 'gte'],
+            'lastViewedByMeDate': ['lte', 'lt', '=', 'gt', 'gte'],
             'trashed': ['='],
             'starred': ['='],
             'hidden': ['='],
@@ -94,4 +94,46 @@ class GDriveAPIParser:
             'writers': ['in'],
             'readers': ['in'],
         }
-        
+        fields = Word(" ".join(self.fields_ops.keys()))
+        operators = Word("contains in lte lt gt gte")
+        self.grammars = {
+            # Defines grammar for queries such as title__contais="[title]"
+            fields("field") + "_" + operators("operator") + "=" + Word(alphas)("value"),
+            # Defines grammars for simple equals like, starred=True
+            fields("field") + "=" + Word(alphas)("value")
+        }
+    
+    def parse(self, **kwargs):
+        """ Determines if user's queries are valid
+
+        Args:
+            **kwargs: Dictionary where the keys follow the convention 
+                field__operator
+
+        Returns:
+            A list of pyparsing.ParseResult: Each ParseResult object has the
+                following fields available:
+                tokens.filed
+                tokens.operator
+                tokens.value
+        """
+        token_list = []
+        for query,val in kwargs.items():
+            full_query  = query + "=" + val
+            # Try each of the grammars
+            for grammar in self.grammars:
+                try:
+                    # Use only correct parses
+                    tokens = grammar.parseString(full_query)
+                    # Determine if this is a valid operator for this field
+                    if not tokens.operator:
+                        # Operator is an equal sign =
+                        tokens.operator = '='
+                    if not tokens.operator in self.fields_ops[tokens.field]:
+                        raise ValueError("Field " + tokens.field 
+                            + " does not have operator " + tokens.operator)
+                    token_list.append(tokens)
+                except ParseException:
+                    # Ignore incorrect parsers
+                    pass
+        return token_list
