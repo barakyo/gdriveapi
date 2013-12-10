@@ -28,7 +28,7 @@ class GDriveBackup:
             # No credentials exist, user must authenticate and get creds 
             # Instantiate the scopes to be used
             self.SCOPES = [
-                    "https://www.googleapis.com/auth/drive.file",
+                    "https://www.googleapis.com/auth/drive",
             ]
             # Set the redirect url, don't know what this does exactly
             self.REDIRECT_URL = "urn:ietf:wg:oauth:2.0:oob"
@@ -69,24 +69,58 @@ class GDriveBackup:
             self.credentials = flow.step2_exchange(auth_code)
             # Store the credentials in Storage file
             self.credentials_file.put(self.credentials)
-        
+    
+    def get_folder_id(self, folder):
+        # Construct the correct dictionary to find the folder
+        query_dict = self.construct_query_dict(folder)
+        # make a request for this folder
+        gdrive_folder = self.drive_service.files().list(
+                **query_dict).execute()
+        logging.debug(gdrive_folder)
+        if len(gdrive_folder['items']) > 0:
+            # Return id of the first item
+            return gdrive_folder['items'][0]['id']
+        else:
+            raise KeyError("Response returned empty")
+
     def get_list(self):
         path_table = self.db['path_table']
         paths = path_table.all()
         for folder in paths:
-            # Construct the correct dictionary to find the folder
-            query_dict = self.construct_query_dict(folder)
-            # make a request for this folder
+            # If no ID was set for the folder, get a folder id
+            if not folder.get('folder_id'):
+                try:
+                    # Get the folder id
+                    folder_id = self.get_folder_id(folder)
+                    # update the current row with the new folder id
+                    # logging.debug("Updating row with id: " + str(folder['id']))
+                    # path_table.update({
+                    #     "id": folder['id'], 
+                    #     "folder_id": folder_id
+                    # }, ['id'])
+                except KeyError:
+                    # Response came back empty, so pass
+                    logging.warning("File Not Found: " + folder['gdrive_path'])
+                    pass
+                except errors.HttpError, error:
+                    # Most likely an invalid request
+                    logging.warning("HTTP Error: " + error)
+                    pass
+            else:
+                folder_id = folder['folder_id']
+            # Get all children with this folder id
             try:
-                gdrive_folder = self.drive_service.files().list(**query_dict).execute()
-                logging.debug(gdrive_folder)
+                children = get_folder_children(folder_id)
             except errors.HttpError, error:
-                print "An error occured: %s" % error
+                logging.warning("HTTP Error: " + error)
                 pass
+
+    def get_folder_children(self, folder_id):
+        return self.drive_service.children().list(folderId=folder_id).execute()
 
     def construct_query_dict(self, folder):
         logging.debug("Creaing query string for: " + folder['gdrive_path'])
-        q_string = "title '" + folder['gdrive_path'] + "' and " \
+        q_string = "title = '" + folder['gdrive_path'] + "' and " \
         + " mimeType = 'application/vnd.google-apps.folder'"
         logging.debug("Query string: " + q_string) 
         return {
