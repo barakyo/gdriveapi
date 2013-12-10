@@ -2,6 +2,7 @@ import httplib2
 import json
 import dataset
 import logging
+import pyparsing
 
 from apiclient.discovery import build
 from apiclient.http import MediaFileUpload
@@ -74,5 +75,23 @@ class GDriveAPI:
             self.credentials = flow.step2_exchange(auth_code)
             # Store the credentials in Storage file
             self.credentials_file.put(self.credentials)
-    
 
+
+class GDriveAPIParser:
+
+    def __init__(self):
+        self.fields_ops = {
+            'title': ['contains', '='],
+            'fullText': ['contains'],
+            'mimeType': ['='],
+            'modifiedDate': ['<=', '<', '=', '>', '>='],
+            'lastViewedByMeDate': ['<=', '<', '=', '>', '>='],
+            'trashed': ['='],
+            'starred': ['='],
+            'hidden': ['='],
+            'parents': ['in'],
+            'owners': ['in'],
+            'writers': ['in'],
+            'readers': ['in'],
+        }
+        
