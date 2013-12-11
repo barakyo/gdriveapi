@@ -2,7 +2,8 @@ import httplib2
 import json
 import dataset
 import logging
-from pyparsing import Word, alphas, ParseException
+from pyparsing import (Word, alphas, ParseException, OneOrMore, 
+    ParseResults) 
 
 from apiclient.discovery import build
 from apiclient.http import MediaFileUpload
@@ -55,6 +56,7 @@ class GDriveAPI(object):
         http = httplib2.Http()
         http = self.credentials.authorize(http)
         self.drive_service = build('drive', 'v2', http=http)
+        self.parser = GDriveAPIParser()
     
     def authenticate(self, client_id, client_secret, scopes, redirect_url):
         """ Authenticates the user for the application they've provided give
@@ -66,7 +68,7 @@ class GDriveAPI(object):
         redirect_url: The redirect_url for your application
 
         """
-        flow = OAuth2WebServerFlow(self.CLIENT_ID,self.CLIENT_SECRET,self.SCOPES,self.REDIRECT_URL)
+        flow = OAuth2WebServerFlow(client_id, client_secret, scopes, redirect_url)
         if not self.credentials:
             # Follow the steps for authentication
             authorize_url = flow.step1_get_authorize_url()
@@ -76,6 +78,23 @@ class GDriveAPI(object):
             # Store the credentials in Storage file
             self.credentials_file.put(self.credentials)
 
+    def get_folder(self, **kwargs):
+        # Parse kwargs to ensure they're valid
+        tokens = self.parser.parse(**kwargs)
+        query = self.construct_query(tokens)
+        return self.drive_service.files().list(**query).execute()
+
+    def construct_query(self, tokens):
+        query = ""
+        for token in tokens:
+            query += token.field + " " + token.operator + " '"
+            if type(token.value) is ParseResults:
+                query += " ".join(token.value)
+            else:
+                query += token.value
+            query += "'"
+            # query += " and "
+        return {"q": query}
 
 class GDriveAPIParser(object):
 
@@ -96,11 +115,12 @@ class GDriveAPIParser(object):
         }
         fields = Word(" ".join(self.fields_ops.keys()))
         operators = Word("contains in lte lt gt gte")
+        values = Word(alphas + " ").leaveWhitespace()
         self.grammars = {
             # Defines grammar for queries such as title__contais="[title]"
-            fields("field") + "_" + operators("operator") + "=" + Word(alphas)("value"),
+            fields("field") + "_" + operators("operator") + "=" + OneOrMore(values)("value"),
             # Defines grammars for simple equals like, starred=True
-            fields("field") + "=" + Word(alphas)("value")
+            fields("field") + "=" + values("value")
         }
     
     def parse(self, **kwargs):
@@ -113,7 +133,7 @@ class GDriveAPIParser(object):
         Returns:
             A list of pyparsing.ParseResult: Each ParseResult object has the
                 following fields available:
-                tokens.filed
+                tokens.field
                 tokens.operator
                 tokens.value
         """

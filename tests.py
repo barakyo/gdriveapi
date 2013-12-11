@@ -18,16 +18,18 @@ class GDriveAPITests(unittest.TestCase):
         """ Tests that the class fails correctly when no configuration
         files are provided """
         with self.assertRaises(ValueError):
-            self.gdrive = GDriveAPI()
+            gdrive = GDriveAPI()
 
     def test_invalid_cred_file(self):
         """ Tests that the class fails correctly when an invalid file is 
         passed in """
         with self.assertRaises(ValueError):
-            self.gdrive = GDriveAPI("fake_file")
+            gdrive = GDriveAPI("fake_file")
 
     def test_get_folder(self):
-        pass
+       gdrive = GDriveAPI("gdrive_credentials")
+       folder = gdrive.get_folder(title_contains="Grad School")
+       self.assertEqual(folder, folder)
 
     def test_title_contains(self):
         parser = GDriveAPIParser()
@@ -41,7 +43,6 @@ class GDriveAPITests(unittest.TestCase):
         parser = GDriveAPIParser()
         with self.assertRaises(ValueError):
             tokens = parser.parse(fullText="blue")
-
 
 if __name__ == '__main__':
     unittest.main()     
