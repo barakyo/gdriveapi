@@ -29,7 +29,7 @@ class GDriveAPITests(unittest.TestCase):
     def test_get_folder(self):
        gdrive = GDriveAPI("gdrive_credentials")
        folder = gdrive.get_folder(title_contains="Grad School")
-       self.assertEqual(folder, folder)
+       self.assertIsNotNone(folder['items'])
 
     def test_title_contains(self):
         parser = GDriveAPIParser()
@@ -43,6 +43,13 @@ class GDriveAPITests(unittest.TestCase):
         parser = GDriveAPIParser()
         with self.assertRaises(ValueError):
             tokens = parser.parse(fullText="blue")
+
+    def test_get_file_contents(self):
+        gdrive = GDriveAPI("gdrive_credentials")
+        folder = gdrive.get_folder(title_contains="Grad School")
+        folder_id = folder['items'][0]['id']
+        files = gdrive.get_folder_contents(folder_id, title="Fall 2013")
+        self.assertEqual(files['items'][0]['title'], "Fall 2013")
 
 if __name__ == '__main__':
     unittest.main()     

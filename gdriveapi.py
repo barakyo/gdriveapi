@@ -2,14 +2,18 @@ import httplib2
 import json
 import dataset
 import logging
-from pyparsing import (Word, alphas, ParseException, OneOrMore, 
-    ParseResults) 
+import logging
+import pprint
 
+from pyparsing import (Word, alphas, ParseException, OneOrMore, 
+    ParseResults, alphanums) 
 from apiclient.discovery import build
 from apiclient.http import MediaFileUpload
 from oauth2client.client import OAuth2WebServerFlow
 from oauth2client.file import Storage
 from apiclient import errors
+
+logging.basicConfig(filename='gdriveapi.log', level=logging.DEBUG)
 
 class GDriveAPI(object):
 
@@ -80,20 +84,60 @@ class GDriveAPI(object):
 
     def get_folder(self, **kwargs):
         # Parse kwargs to ensure they're valid
+        logging.debug("Getting folder, options passed in: " 
+        + str(kwargs)) 
         tokens = self.parser.parse(**kwargs)
         query = self.construct_query(tokens)
+        query['q'] += (" and mimeType = "
+        "'application/vnd.google-apps.folder'")
+        logging.info("Final query is: " + str(query))
         return self.drive_service.files().list(**query).execute()
+
+    def get_file(self, **kwargs):
+        logging.debug("Getting file, options passed in: "
+        + str(kwargs))
+        tokens = self.parser.parse(**kwargs)
+        query = self.construct_query(tokens)
+        logging.info("Final query is: " + str(query))
+        return self.drive_service.files().list(**query).execute()
+
+    
+    def get_folder_contents(self, folder_id, **kwargs):
+        kwargs['parents_in'] = folder_id
+        logging.debug("Getting folder contents with options:"
+        + str(kwargs))
+        tokens = self.parser.parse(**kwargs)
+        logging.debug("tokens returned: " + str(tokens))
+        query = self.construct_query(tokens)
+        logging.info("Final query is: " + str(query))
+        return self.drive_service.files().list(**query).execute()
+
+    def construct_value(self, value):
+        query = "'"
+        if type(value) is ParseResults:
+            query += " ".join(value)
+        else:
+            query += value
+        query += "'"
+        return query
 
     def construct_query(self, tokens):
         query = ""
-        for token in tokens:
-            query += token.field + " " + token.operator + " '"
-            if type(token.value) is ParseResults:
-                query += " ".join(token.value)
+        token_length = len(tokens)
+        for token, x in zip(tokens, xrange(token_length)):
+            logging.debug("Constructing query string for token: "
+            + str(token))
+            if token.operator == "in":
+                """ When operator is 'in' query is composed as 
+                    <value> in <field> """
+                query += "%s in %s" % (
+                    self.construct_value(token.value),
+                    token.field)
             else:
-                query += token.value
-            query += "'"
-            # query += " and "
+                query += " ".join([token.field,  token.operator,
+                    self.construct_value(token.value)])
+            if(x+1 < token_length):
+                query += " and "
         return {"q": query}
 
 class GDriveAPIParser(object):
@@ -115,7 +159,7 @@ class GDriveAPIParser(object):
         }
         fields = Word(" ".join(self.fields_ops.keys()))
         operators = Word("contains in lte lt gt gte")
-        values = Word(alphas + " ").leaveWhitespace()
+        values = Word(alphanums + " ").leaveWhitespace()
         self.grammars = {
             # Defines grammar for queries such as title__contais="[title]"
             fields("field") + "_" + operators("operator") + "=" + OneOrMore(values)("value"),
@@ -140,6 +184,7 @@ class GDriveAPIParser(object):
         token_list = []
         for query,val in kwargs.items():
             full_query  = query + "=" + val
+            logging.debug("Parsing query: " + full_query)
             # Try each of the grammars
             for grammar in self.grammars:
                 try:
@@ -155,5 +200,7 @@ class GDriveAPIParser(object):
                     token_list.append(tokens)
                 except ParseException:
                     # Ignore incorrect parsers
+                    logging.debug("query " + full_query + " did not pass "
+                    + "grammar " + str(grammar))
                     pass
         return token_list
