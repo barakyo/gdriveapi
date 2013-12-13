@@ -1,9 +1,6 @@
 import httplib2
 import json
-import dataset
 import logging
-import logging
-import pprint
 
 from pyparsing import (Word, alphas, ParseException, OneOrMore, 
     ParseResults, alphanums) 
@@ -12,6 +9,7 @@ from apiclient.http import MediaFileUpload
 from oauth2client.client import OAuth2WebServerFlow
 from oauth2client.file import Storage
 from apiclient import errors
+from collections import namedtuple
 
 logging.basicConfig(filename='gdriveapi.log', level=logging.DEBUG)
 
@@ -82,7 +80,57 @@ class GDriveAPI(object):
             # Store the credentials in Storage file
             self.credentials_file.put(self.credentials)
 
+    def create_gdrive_files(self, files):
+        """ Accepts a list of dictionaries from the result of a successful 
+        query and converts the items into objects using nametuples for
+        convenience of the API user 
+
+        Constructs namedtuples after the keys of the first file in the list
+        
+        Args:
+            files - The items list of a successful response, that is
+                    response['items']
+
+        Returns:
+            A list of GDriveFiles
+        """
+        GDriveFile = namedtuple('GDriveFile', files[0].keys())
+        return [GDriveFile(**f) for f in files]
+ 
     def get_folder(self, **kwargs):
+        """ Retrieves one or more folder from Google Drive. This function
+            will return folders and ONLY folders since it appends
+                "and mimeType = 'application/vnd.google-aps.folder'
+            to any query.
+
+            If you wish to retrieve both folders and files, please use the
+            get_file() method.
+    
+            Args:
+            **kwargs: Accepts any query parameters that are valid Google Drive
+                      SDK requests.
+                      
+                      Equal values can be requested by simply using the normal 
+                      params
+                      
+                      Fields that require keyword operators such as contains,
+                      in, or greater than/less than/equal to operators will 
+                      use the following syntax:
+   
+                        field_operator=VALUE
+                      
+                      For example, if you wish to query for all files that have
+                      the word "blue" in them you would use the folowing 
+                      parameter:
+                        
+                        title_contains="blue"
+ 
+       Returns:
+            
+            GDriveFile objects (namedtuples) so that the returned results can
+            be accessed as typical objects.
+
+        """
         # Parse kwargs to ensure they're valid
         logging.debug("Getting folder, options passed in: " 
         + str(kwargs)) 
@@ -91,28 +139,88 @@ class GDriveAPI(object):
         query['q'] += (" and mimeType = "
         "'application/vnd.google-apps.folder'")
         logging.info("Final query is: " + str(query))
-        return self.drive_service.files().list(**query).execute()
+        folders = self.drive_service.files().list(**query).execute()
+        return self.create_gdrive_files(folders['items'])
 
     def get_file(self, **kwargs):
+        """ Retrieves one or more files from Google Drive
+
+        Args:
+            **kwargs: Accepts any query parameters that are valid Google Drive
+                      SDK requests.
+                      
+                      Equal values can be requested by simply using the normal 
+                      params
+                      
+                      Fields that require keyword operators such as contains,
+                      in, or greater than/less than/equal to operators will 
+                      use the following syntax:
+   
+                        field_operator=VALUE
+                      
+                      For example, if you wish to query for all files that have
+                      the word "blue" in them you would use the folowing 
+                      parameter:
+                        
+                        title_contains="blue"
+        Returns:
+            
+            GDriveFile objects (namedtuples) so that the returned results can
+            be accessed as typical objects.
+
+        """
         logging.debug("Getting file, options passed in: "
         + str(kwargs))
         tokens = self.parser.parse(**kwargs)
         query = self.construct_query(tokens)
         logging.info("Final query is: " + str(query))
-        return self.drive_service.files().list(**query).execute()
+        files = self.drive_service.files().list(**query).execute()
+        return self.create_gdrive_files(files['items'])
 
     
     def get_folder_contents(self, folder_id, **kwargs):
+        """ Retrieves one or more files from Google Drive which reside in the 
+            folder with the specified id.
+
+            This method is a shorthand for the method 
+                get_file(parents_in=[FOLDER_ID]
+
+        Args:
+            **kwargs: Accepts any query parameters that are valid Google Drive
+                      SDK requests.
+                      Equal values can be requested by simply using the normal 
+                      params
+                      
+                      Fields that require keyword operators such as contains,
+                      in, or greater than/less than/equal to operators will 
+                      use the following syntax:
+
+                        field_operator=VALUE
+                      
+                      For example, if you wish to query for all files that have
+                      the word "blue" in them you would use the folowing 
+                      parameter:
+                        
+                        title_contains="blue"
+        Returns:
+            
+            GDriveFile objects (namedtuples) so that the returned results can
+            be accessed as typical objects.
+
+        """
         kwargs['parents_in'] = folder_id
-        logging.debug("Getting folder contents with options:"
-        + str(kwargs))
-        tokens = self.parser.parse(**kwargs)
-        logging.debug("tokens returned: " + str(tokens))
-        query = self.construct_query(tokens)
-        logging.info("Final query is: " + str(query))
-        return self.drive_service.files().list(**query).execute()
+        return self.get_file(**kwargs) 
 
     def construct_value(self, value):
+        """ Constructs a valid value for a query, will join ParseResults
+        together so that all words will be apart of the value
+
+        Args:
+            value: String, list, or ParseResults of words to be joined
+
+        Returns:
+            A value contained in single quotes
+        """
         query = "'"
         if type(value) is ParseResults:
             query += " ".join(value)
@@ -122,6 +230,27 @@ class GDriveAPI(object):
         return query
 
     def construct_query(self, tokens):
+        """ Constructs a valid Google Drive SDK query
+        
+        Some notes:
+            If the operator is "in", the query is constructed using the syntax
+            
+                <value> in <field>
+
+            If the operator is a contains, =, <, <=, >, >= the query is simply
+            constructed using the syntax:
+
+                <field> <operator> <value>
+
+        Args:
+            tokens: A list of tokens which have the fields:
+                    field, value, and operator
+
+        Returns:
+            A dictionary with the key "q" containing a valid 
+            Google Drive SDK query.
+
+        """
         query = ""
         token_length = len(tokens)
         for token, x in zip(tokens, xrange(token_length)):
@@ -203,4 +332,4 @@ class GDriveAPIParser(object):
                     logging.debug("query " + full_query + " did not pass "
                     + "grammar " + str(grammar))
                     pass
-        return token_list
+        return token_list 
