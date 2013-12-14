@@ -1,6 +1,7 @@
 import unittest
 from gdriveapi import GDriveAPI
 from gdriveapi import GDriveAPIParser
+from datetime import datetime, timedelta
 
 class GDriveAPITests(unittest.TestCase):
     """ Tests GDriveAPI  for several cases including:
@@ -51,5 +52,19 @@ class GDriveAPITests(unittest.TestCase):
         files = gdrive.get_folder_contents(folder_id, title="Fall 2013")
         self.assertEqual(files[0].title, "Fall 2013")
 
+    def test_week_old_files(self):
+        """ Runs a test to get a list of files that have been modified in
+            the last week. 
+
+        Essentially testing that modified date and gt/e and lt/e work
+        """
+        now = datetime.now()
+        one_week_ago = now - timedelta(days=10)
+        gdrive = GDriveAPI("gdrive_credentials")
+        files = gdrive.get_file(title_contains="document", 
+                modifiedDate_lt=datetime.now(),
+                modifiedDate_gt=one_week_ago)
+        self.assertIsNotNone(files)
+    
 if __name__ == '__main__':
     unittest.main()     

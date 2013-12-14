@@ -10,6 +10,8 @@ from oauth2client.client import OAuth2WebServerFlow
 from oauth2client.file import Storage
 from apiclient import errors
 from collections import namedtuple
+from datetime import datetime
+from pytz import utc
 
 logging.basicConfig(filename='gdriveapi.log', level=logging.DEBUG)
 
@@ -59,6 +61,12 @@ class GDriveAPI(object):
         http = self.credentials.authorize(http)
         self.drive_service = build('drive', 'v2', http=http)
         self.parser = GDriveAPIParser()
+        self.op_map = {
+            'lte': '<=', 
+            'lt':  '<',
+            'gt':  '>',
+            'gte': '>=',
+        }
     
     def authenticate(self, client_id, client_secret, scopes, redirect_url):
         """ Authenticates the user for the application they've provided give
@@ -85,7 +93,8 @@ class GDriveAPI(object):
         query and converts the items into objects using nametuples for
         convenience of the API user 
 
-        Constructs namedtuples after the keys of the first file in the list
+        Constructs namedtuples after the keys of the largest dict returned in 
+        the items list
         
         Args:
             files - The items list of a successful response, that is
@@ -94,8 +103,11 @@ class GDriveAPI(object):
         Returns:
             A list of GDriveFiles
         """
-        GDriveFile = namedtuple('GDriveFile', files[0].keys())
-        return [GDriveFile(**f) for f in files]
+        file_list = []
+        for f in files:
+            GDriveFile = namedtuple('GDriveFile', f.keys())
+            file_list.append(GDriveFile(**f))
+        return file_list
  
     def get_folder(self, **kwargs):
         """ Retrieves one or more folder from Google Drive. This function
@@ -272,12 +284,19 @@ class GDriveAPI(object):
 class GDriveAPIParser(object):
 
     def __init__(self):
+        self.op_map = {
+            'lte': '<=', 
+            'lt':  '<',
+            'gt':  '>',
+            'gte': '>=',
+            '=':   '=',
+        }
         self.fields_ops = {
             'title': ['contains', '='],
             'fullText': ['contains'],
             'mimeType': ['='],
-            'modifiedDate': ['lte', 'lt', '=', 'gt', 'gte'],
-            'lastViewedByMeDate': ['lte', 'lt', '=', 'gt', 'gte'],
+            'modifiedDate': self.op_map.keys(),
+            'lastViewedByMeDate': self.op_map.keys(),
             'trashed': ['='],
             'starred': ['='],
             'hidden': ['='],
@@ -312,7 +331,11 @@ class GDriveAPIParser(object):
         """
         token_list = []
         for query,val in kwargs.items():
-            full_query  = query + "=" + val
+            full_query  = query + "="
+            if type(val) is datetime:
+                full_query += val.isoformat()
+            else:
+                full_query += val
             logging.debug("Parsing query: " + full_query)
             # Try each of the grammars
             for grammar in self.grammars:
@@ -323,9 +346,20 @@ class GDriveAPIParser(object):
                     if not tokens.operator:
                         # Operator is an equal sign =
                         tokens.operator = '='
+                    # Determine if the operator is valid
                     if not tokens.operator in self.fields_ops[tokens.field]:
                         raise ValueError("Field " + tokens.field 
                             + " does not have operator " + tokens.operator)
+                    # If the passed in field was a date field
+                    if('modifiedDate' == tokens.field or 
+                        'lastViewedByMeDate' == tokens.field):
+                        logging.debug("Performing date localizations")
+                        # Replace operator word with actual operator
+                        tokens.operator = self.op_map[tokens.operator] 
+                        # Perform some localization and string conversion
+                        localized_date = utc.localize(val)
+                        # Replace current value with the UTC string value
+                        tokens.value = localized_date.isoformat()
                     token_list.append(tokens)
                 except ParseException:
                     # Ignore incorrect parsers
