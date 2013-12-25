@@ -3,3 +3,5 @@ gdrive_backup.db
 *credentials
 *.swp
 gdrive_backup.log
+*.pyc
+*.log
