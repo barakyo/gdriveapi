@@ -61,7 +61,7 @@ class GDriveAPITests(unittest.TestCase):
         now = datetime.now()
         one_week_ago = now - timedelta(days=10)
         gdrive = GDriveAPI("gdrive_credentials")
-        files = gdrive.get_file(title_contains="document", 
+        files = gdrive.get_file_info(title_contains="document", 
                 modifiedDate_lt=datetime.now(),
                 modifiedDate_gt=one_week_ago)
         self.assertIsNotNone(files)

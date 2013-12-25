@@ -36,6 +36,8 @@ class GDriveAPI(object):
         # Determine if a credentials file was providied
         if not credentials_file:
             # If no file was provided, authenticate the user given the kwargs
+            # Create a new credentials file
+            self.credentials_file = Storage("credentials")
             try:
                self.authenticate(config_kwargs.pop("client_id"),
                        config_kwargs.pop("client_secret"),
@@ -46,9 +48,6 @@ class GDriveAPI(object):
                 # necessary credentials
                 raise ValueError("A client_id, client_secret, scope, and "
                     "redirect_url must be provided to authenticate")
-            # Start the authentication process
-            self.credentials_file = Storage("credentials")
-            self.authenticate()
         else:
             # Load credentials from the provided file
             self.credentials_file = Storage(credentials_file) 
@@ -79,14 +78,13 @@ class GDriveAPI(object):
 
         """
         flow = OAuth2WebServerFlow(client_id, client_secret, scopes, redirect_url)
-        if not self.credentials:
-            # Follow the steps for authentication
-            authorize_url = flow.step1_get_authorize_url()
-            print("Please goto the following link in your browser: " + authorize_url)
-            auth_code = raw_input("Enter verification code: ")
-            self.credentials = flow.step2_exchange(auth_code)
-            # Store the credentials in Storage file
-            self.credentials_file.put(self.credentials)
+        # Follow the steps for authentication
+        authorize_url = flow.step1_get_authorize_url()
+        print("Please goto the following link in your browser: " + authorize_url)
+        auth_code = raw_input("Enter verification code: ")
+        self.credentials = flow.step2_exchange(auth_code)
+        # Store the credentials in Storage file
+        self.credentials_file.put(self.credentials)
 
     def create_gdrive_files(self, files):
         """ Accepts a list of dictionaries from the result of a successful 
@@ -154,7 +152,7 @@ class GDriveAPI(object):
         folders = self.drive_service.files().list(**query).execute()
         return self.create_gdrive_files(folders['items'])
 
-    def get_file(self, **kwargs):
+    def get_file_info(self, **kwargs):
         """ Retrieves one or more files from Google Drive
 
         Args:
@@ -221,7 +219,7 @@ class GDriveAPI(object):
 
         """
         kwargs['parents_in'] = folder_id
-        return self.get_file(**kwargs) 
+        return self.get_file_info(**kwargs) 
 
     def construct_value(self, value):
         """ Constructs a valid value for a query, will join ParseResults
