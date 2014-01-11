@@ -221,6 +221,104 @@ class GDriveAPI(object):
         kwargs['parents_in'] = folder_id
         return self.get_file_info(**kwargs) 
 
+    def upload_file(self, filepath, convert=None, 
+            useContentAsIndexableText=None,
+            visibility=None, ocrLanguage=None, 
+            ocr=None, timedTextLanguage=None, 
+            timedTextTrackName=None, pinned=None, **kwargs):
+        """ Uploads a file
+
+            Args:
+                filepath: Path of file to upload, String
+                
+                The following has been copied from: 
+                https://developers.google.com/drive/v2/reference/files/insert
+                
+                convert: boolean,  Whether to convert this file to the 
+                    corresponding Google Docs format. (Default: false)
+                
+                ocr: boolean Whether to attempt OCR on .jpg, .png, .gif, 
+                    or .pdf uploads. (Default: false)
+                
+                ocrLanguage:	string	 If ocr is true, hints at the 
+                    language to use. Valid values are ISO 639-1 codes.
+                
+                pinned:	boolean	 Whether to pin the head revision of 
+                    the uploaded file. (Default: false)
+                
+                timedTextLanguage:	string	 The language of the timed text.
+                
+                timedTextTrackName:	string	 The timed text track name.
+                
+                useContentAsIndexableText:	boolean	 Whether to use the 
+                    content as indexable text. (Default: false)
+                
+                visibility:	string	 The visibility of the new file. 
+                    This parameter is only relevant when convert=false.
+            
+            Keyword Args:
+                kwargs are based on the request body parameters
+
+                description: string	A short description of the file.		
+                
+                lastViewedByMeDate:	datetime	Last time this 
+                    file was viewed by the user (formatted RFC 3339 timestamp).	
+                
+                mimeType: string	The MIME type of the file. This is only 
+                    mutable on update when uploading new content. This field can 
+                    be left blank, and the mimetype will be determined from the 
+                    uploaded content's MIME type.	
+                
+                modifiedDate: datetime	Last time this file was modified by anyone 
+                    (formatted RFC 3339 timestamp). This is only mutable on 
+                    update when the setModifiedDate parameter is set.	
+                
+                parents[]: list	Collection of parent folders which contain this
+                    file.
+                
+                title:	string	The title of the this file. Used to identify 
+                    file or folder name.
+        """
+        pass
+    def download_file(self, id=None, **kwargs):
+        """ Retrieves the contents of the specified file
+           
+            Arguments:
+                id: ID of the file to retrieve
+            
+            kwargs:
+                Valid Google Drive queries
+
+            Raises:
+                ValueError: Multiple files were found, query was not specific
+                            enough
+
+                IOError: Google returned a 404 for the specified file ID,
+                         the file could not be found.
+        """
+        if not id:
+            # An ID was not specified, so retrieve the file using the query
+            file = self.get_file_info(**kwargs)
+            if len(file) > 1:
+                raise ValueError("""Multiple files were found, please retry
+                    with a more specific query""")
+            id = file[0].id
+        # Download the file
+        gdrive_file = self.drive_service.files().get(fileId=id).execute()
+        # Determine if there was a rreturn or if a downloadURL exists
+        try:
+            url = gdrive_file['downloadUrl']
+        except KeyError:
+            # Let the user know the file couldn't be found
+            raise IOError("File with id " + str(id) + " could not be found")
+        # Grab contents of the file
+        resp, content = self.drive_service._http.request(url)
+        if resp.status != 200:
+            # If a 404 or something else was raised, let the user know
+            raise IOError("File could not be found: %s" % resp)
+        # Return the content of the file
+        return content
+
     def construct_value(self, value):
         """ Constructs a valid value for a query, will join ParseResults
         together so that all words will be apart of the value

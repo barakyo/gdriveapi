@@ -66,5 +66,23 @@ class GDriveAPITests(unittest.TestCase):
                 modifiedDate_gt=one_week_ago)
         self.assertIsNotNone(files)
     
+    def test_download_file_by_search(self):
+        gdrive = GDriveAPI("gdrive_credentials")
+        files = gdrive.get_file_info(title_contains="document")
+        # Ensure that files were returned
+        self.assertIsNotNone(files)
+        try:
+            my_document = gdrive.download_file(id=files[0].id)
+        except IOError:
+            self.assertFalse(True, "File cannot be found")
+        else:
+            self.assertTrue(True)
+     
+    def test_upload_file(self):
+        gdrive = GDriveAPI("gdrive_credentials")
+        file = gdrive.upload_file("test.txt", "Test File", 
+                "A test file", "text/Plain")
+
+
 if __name__ == '__main__':
     unittest.main()     
