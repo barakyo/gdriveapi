@@ -66,7 +66,7 @@ class GDriveAPITests(unittest.TestCase):
                 modifiedDate_gt=one_week_ago)
         self.assertIsNotNone(files)
     
-    def test_download_file_by_search(self):
+    def test_download_file_by_id(self):
         gdrive = GDriveAPI("gdrive_credentials")
         files = gdrive.get_file_info(title_contains="document")
         # Ensure that files were returned
@@ -75,6 +75,17 @@ class GDriveAPITests(unittest.TestCase):
             my_document = gdrive.download_file(id=files[0].id)
         except IOError:
             self.assertFalse(True, "File cannot be found")
+        else:
+            self.assertTrue(True)
+
+    def test_download_file_by_search(self):
+        gdrive = GDriveAPI("gdrive_credentials")
+        try:
+            my_document = gdrive.download_file(title="My document")
+        except ValueError:
+            self.assertFalse(True, "too many files returned")
+        except IOError:
+            self.assertFalse(True, "File could not be found")
         else:
             self.assertTrue(True)
      
