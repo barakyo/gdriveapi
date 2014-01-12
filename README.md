@@ -46,11 +46,11 @@ All functions accept keyword arguments optionally appended by a valid operator t
     from gdriveapi import GDriveAPI
     
     gdrive = GDriveAPI("path/to/credentials")
-    gdrive.get_file_info(title="My document")
+    files = gdrive.get_file_info(title="My document")
     
 ### Querying for all files that contain the word document ###
 
     from gdriveapi import GDriveAPI
     
     gdrive = GDriveAPI("path/to/credentials")
-    gdrive.get_file_info(title_contains="document") 
+    files = gdrive.get_file_info(title_contains="document")
